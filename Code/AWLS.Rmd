@@ -1,0 +1,240 @@
+---
+title: "Weighted Alternating Least Squares with the LastFM Dataset"
+author: "William Morgan"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+rm(list = ls(all = TRUE))
+libs <-  c("data.table", "tidyverse", "Matrix", "reco", "parallel")
+suppressPackageStartupMessages(lapply(libs, library, character.only = T))
+```
+
+## Load data
+
+```{r Load and add names, cache = TRUE}
+# Load data and add names
+raw_data <-  fread("Data/lastfm-dataset-360K/usersha1-artmbid-artname-plays.tsv", showProgress = F)
+names(raw_data) <- c("user_id", "artist_id", "artist_name", "number_plays")
+
+```
+*** 
+
+## Tidy data
+
+```{r Tidy data}
+# Use integer-valued ids for users and items
+user_encoding <-  raw_data %>%
+  distinct(user_id) %>%
+  mutate(uid = row_number())
+  
+item_encoding <- raw_data %>%
+  distinct(artist_id) %>%
+  mutate(iid = row_number())
+
+dt <-  raw_data %>%
+  select(-artist_name) %>%
+  inner_join(user_encoding, by = 'user_id') %>%
+  inner_join(item_encoding, by = 'artist_id')
+
+rm(raw_data)
+```
+
+*** 
+
+## Split data
+- We use only 1000 listeners as a testing set
+- For each listener in the testing set, we need to randomly split their listens 
+into history and future listens (this is done for testing)
+
+```{r train/test split}
+# Define our model matrix
+X = sparseMatrix(i = dt$uid, j = dt$iid, x = dt$number_plays, 
+                 dimnames = list(user_encoding$user_id, item_encoding$artist_name))
+
+n_test <- 1000L
+test_uid <- sample(nrow(user_encoding), n_test)
+
+X_train <-  X[-test_uid, ]
+X_test <-  X[test_uid, ]
+
+rm(X)
+
+# Split our test set into "history" or "future"
+temp = as(X_test, "TsparseMatrix")
+temp = data.table(i = temp@i, j = temp@j, x = temp@x) 
+
+temp <- temp %>%
+  group_by(i) %>%
+  mutate(ct = length(j),
+         history = 
+           sample(c(TRUE, FALSE), ct, replace = TRUE, prob = c(.5, .5))) %>%
+  select(-ct)
+
+X_test_history <- temp %>% filter(history == TRUE)
+X_test_future <- temp %>% filter(history == FALSE)
+
+rm(temp)
+
+# Convert them back to sparse matrices
+X_test_history <- sparseMatrix(i = X_test_history$i,
+                               j = X_test_history$j,
+                               x = X_test_history$x,
+                               dims = dim(X_test),
+                               dimnames = dimnames(X_test),
+                               index1 = FALSE)
+
+X_test_future <- sparseMatrix(i = X_test_future$i,
+                              j = X_test_future$j,
+                              x = X_test_future$x,
+                              dims = dim(X_test),
+                              dimnames = dimnames(X_test),
+                              index1 = FALSE)
+
+rm(user_encoding, item_encoding, n_test, test_uid, dt)
+```
+*** 
+
+## Set up Model
+Recall our loss function:
+
+$$
+L = \sum_u\sum_iC_{ui}(P_{ui} - X_uY_i)^2 + \lambda(\Vert{X}\Vert^2 + \Vert{Y}\Vert^2)
+$$
+We define two functions that will allow us to create the confidence matrix:
+$$
+\begin{aligned}
+C_{ui} = 1 + \alpha log(1 + \frac{r_{ui}}{\epsilon}) \\
+C_{ui} = 1 + \alpha log(1 + r_{ui})
+\end{aligned}
+$$
+$\alpha$ and $\epsilon$ are hyperparameters that should be tuned using CV
+
+```{r model setup}
+# Initialize a model
+model <- WRMF$new(rank = 10L)
+
+# Define confidence functions and create matrices
+log_conf <-  function(x, alpha, epsilon){
+  x_confidence <-  x
+  stopifnot(inherits(x, "sparseMatrix"))
+  x_confidence@x = 1 + alpha * log(1 + (x@x / epsilon))
+  return(x_confidence)
+}
+
+lin_conf <- function(x, alpha) {
+  x_confidence <- x
+  stopifnot(inherits(x, "sparseMatrix"))
+  x_confidence@x = 1 + alpha * x@x
+  return(x_confidence)
+}
+
+alpha <- .1
+X_train_conf <- lin_conf(X_train, alpha)
+X_test_history_conf <- lin_conf(X_test_history, alpha)
+
+# Add scoring metrics
+model$add_scorers(x_train = X_test_history_conf, x_cv = X_test_future,
+                  list("map10" = "map@10", "ndcg-10" = "ndcg@10"))
+```
+
+***
+
+## Train Model
+
+```{r training, eval = F}
+# User embeddings
+user_embeddings <- model$fit_transform(X_train_conf)
+
+# Item embeddings 
+item_embeddings <-  model$components
+
+# Make a prediction for a new user
+new_user_embeddings <- model$transform(X_test_history_conf)
+new_user_1 <-  X_test_history_conf[1:1, , drop = FALSE]
+
+new_user_predictions <- model$predict(new_user_1, k = 10)
+
+```
+
+
+## Tune Model
+
+```{r tuning model}
+# Convergence parameters
+n_iter_max = 10L
+convergence_tol = .01
+
+# Hyperparameters to test
+grid = expand.grid(alpha = c(.01, .1, 1),
+                   rank = c(8, 16, 32, 40),
+                   lambda = c(.01, .1, 1, 10))
+
+# Empty vector to throw results into
+scores <-  vector("list", nrow(grid))
+
+for (k in seq_len(nrow(grid))){
+  # Define parameters
+  alpha = grid$alpha[[k]]
+  rank = grid$rank[[k]]
+  lambda = grid$lambda[[k]]
+  
+  # Initialize
+  model <- WRMF$new(rank = rank)
+  
+  # Conf. matrices
+  X_train_conf<- lin_conf(X_train, alpha)
+  X_test_history_conf <- lin_conf(X_test_history, alpha)
+  
+  # Scoring metrics
+  model$add_scorers(x_train = X_test_history_conf,
+                    x_cv = X_test_future,
+                    list("map10" = "map@10", "ndcg-10" = "ndcg@10"))
+  
+  # Fit
+  fit <-  model$fit_transform(X_train_conf, n_iter = n_iter_max,
+                              convergence_tol = convergence_tol)
+
+  # Extract score
+  score <-  attr(fit, "trace")
+  
+  score$alpha = alpha
+  score$lambda = lambda
+  score$rank = rank
+  
+  # Add to list
+  scores[[k]] <-  score
+  
+  # Clean up
+  rm(alpha, rank, lambda, model, score)
+}
+
+cv_results <-  bind_rows(scores) %>%
+  group_by(alpha, lambda, rank, scorer) %>%
+  arrange(iter) %>%
+  filter(row_number() == n()) %>%
+  select(-iter) %>%
+  ungroup()
+
+```
+
+```{r best performances by scorer}
+best_loss <-  cv_results %>%
+  filter(scorer == "loss") %>%
+  arrange(value) %>%
+  filter(row_number() == 1)
+
+best_map <-  cv_results %>%
+  filter(scorer == "map10") %>%
+  arrange(desc(value)) %>%
+  filter(row_number() == 1)
+
+best_ndcg <-  cv_results %>%
+  filter(scorer == "ndcg-10") %>%
+  arrange(desc(value)) %>%
+  filter(row_number() == 1)
+
+best <-  bind_rows(best_loss, best_map, best_ndcg)
+rm(best_loss, best_map, best_ndcg)
+```

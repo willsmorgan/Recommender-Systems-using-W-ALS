@@ -1,0 +1,80 @@
+---
+title: "W-ALS with Implicit Feedback Data"
+author: "William Morgan"
+date: "`r format(Sys.time(), '%d %B, %Y')`"
+output: 
+  pdf_document:
+      pandoc_args :[
+        "-V", "classoption = twocolumn"
+      ]
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+rm(list = ls(all = TRUE))
+libs <-  c("data.table", "tidyverse", "Matrix", "reco", "parallel")
+suppressPackageStartupMessages(lapply(libs, library, character.only = T))
+```
+
+## Introduction
+
+Online retailers and media services in the modern world have vast catalogues available
+to their clientele. Without any guidance consumers must sift through
+numerous options for even the simplest item. Consumers faced with too many options
+can experience decision fatigue, an idea that describes the decline in decision-making
+quality over long sessions [wikipedia]. It can even cause consumers to avoid
+decisions entirely. Overall, more consumers are less satisfied with their choices 
+and are less likely to return in the future. This is unsatisfactory for both
+consumers and retailers. Hence, there is a major incentive in simplifying the
+menu of choices for a particular item. To accomplish this, firms typically 
+employ recommendation systems, whereby data associated with users and products
+is used to create personalized recommendations. 
+
+Recommendation systems are broadly categorized in two ways - content-based and 
+collaborative filtering. Content-based recommendation systems profiles users
+and items based on their characteristics in order to build recommendations. 
+This can include survey responses, demographics, and other personal characteristics
+for users, while content profiles for items are more domain-dependent. As an example,
+the cast, budget, and genre could all be used in a content-based recommendation 
+system for movies. On the other hand, collaborative filtering techniques rely on
+aggregating user-item interactions. Essentially, past user behavior is used to
+predict future behavior. One of the more famous examples of collaborative
+filtering being used was during the Netflix Prize competition, where participants
+competed in building collaborative filtering algorithms for predicting user ratings
+for films. In this example, the winners developed the _BigChaos_ algorithm [bellkor]
+using a training set of more than 100 million spanning 480,000 users and nearly 
+18,000 movies [zhou_wilkinson]. 
+
+An important distinction to make in the Netflix dataset is that the user-item 
+interactions are movie ratings. To be included in the data set, users
+must (of their own volition) choose to rate the movies they watch. Thus, this 
+data set relies entirely on users who choose to rate. This is problematic
+as it inherently excludes users who do not give their opinion, potentially
+creating issues with selection bias. Furthermore, ratings can be prohibitively
+expensive to collect. As a result, many collaborative filtering data sets instead
+quantify the number of interactions a user has with a particular item. Interactions
+can be defined in a variety of ways depending on the domain, but it is generally
+thought of as a user accessing an item in a catalogue. This type
+of data works around these restrictions at the cost of additional noise. In
+general, these characteristics define what are known as  __explicit__ and 
+__implicit__ feedback data sets. 
+
+Implicit feedback data sets come with several caveats that limit the ways 
+they can be used to build recommender systems. Most importantly, these data sets
+do not contain any negative feedback since they simply count the number of 
+times a user interacts with an item. This skews our representation of a user's
+preferences and forces us to creatively make use of missing entries, where most
+of the negative feedback would be found. A related problem with implicit 
+feedback is that low-frequency entries add a significant amount of noise to the 
+data. Items with one or two accesses do not necessarily capture a user's motives
+and in fact can represent something else entirely. It could be the case that 
+a user was purchasing an item as a gift, or even that they fell asleep and the 
+TV continued playing. We can obviously assume that an item with many accesses 
+from a user implies positive feedback, but this assumption is not 
+as nearly as strong for items with few or no accesses. In a sense, the values
+in these data sets indicate confidence in user preferences towards items. 
+
+Finally, predictions made on implicit feedback data sets can't use traditional metrics 
+for evaluation. Explicit feedback models can easily be evaluated using mean
+square error as a metric for success, but it is not so clear how to evaluate 
+implicit feedback models. We discuss this more laters.
