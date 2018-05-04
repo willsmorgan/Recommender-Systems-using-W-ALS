@@ -1,0 +1,504 @@
+\documentclass[]{article}
+\usepackage{lmodern}
+\usepackage{amssymb,amsmath}
+\usepackage{ifxetex,ifluatex}
+\usepackage{fixltx2e} % provides \textsubscript
+\ifnum 0\ifxetex 1\fi\ifluatex 1\fi=0 % if pdftex
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8]{inputenc}
+\else % if luatex or xelatex
+  \ifxetex
+    \usepackage{mathspec}
+  \else
+    \usepackage{fontspec}
+  \fi
+  \defaultfontfeatures{Ligatures=TeX,Scale=MatchLowercase}
+\fi
+% use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+% use microtype if available
+\IfFileExists{microtype.sty}{%
+\usepackage{microtype}
+\UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage[margin=1in]{geometry}
+\usepackage{hyperref}
+\hypersetup{unicode=true,
+            pdftitle={Weighted Alternating Least Squares with the LastFM Dataset},
+            pdfauthor={William Morgan},
+            pdfborder={0 0 0},
+            breaklinks=true}
+\urlstyle{same}  % don't use monospace font for urls
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\usepackage{framed}
+\definecolor{shadecolor}{RGB}{248,248,248}
+\newenvironment{Shaded}{\begin{snugshade}}{\end{snugshade}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.00,0.00,0.81}{#1}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.31,0.60,0.02}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.00,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.13,0.29,0.53}{\textbf{#1}}}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.81,0.36,0.00}{\textbf{#1}}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textit{#1}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.77,0.63,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.56,0.35,0.01}{\textbf{\textit{#1}}}}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{0.94,0.16,0.16}{#1}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{0.64,0.00,0.00}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\usepackage{graphicx,grffile}
+\makeatletter
+\def\maxwidth{\ifdim\Gin@nat@width>\linewidth\linewidth\else\Gin@nat@width\fi}
+\def\maxheight{\ifdim\Gin@nat@height>\textheight\textheight\else\Gin@nat@height\fi}
+\makeatother
+% Scale images if necessary, so that they will not overflow the page
+% margins by default, and it is still possible to overwrite the defaults
+% using explicit options in \includegraphics[width, height, ...]{}
+\setkeys{Gin}{width=\maxwidth,height=\maxheight,keepaspectratio}
+\IfFileExists{parskip.sty}{%
+\usepackage{parskip}
+}{% else
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{6pt plus 2pt minus 1pt}
+}
+\setlength{\emergencystretch}{3em}  % prevent overfull lines
+\providecommand{\tightlist}{%
+  \setlength{\itemsep}{0pt}\setlength{\parskip}{0pt}}
+\setcounter{secnumdepth}{0}
+% Redefines (sub)paragraphs to behave more like sections
+\ifx\paragraph\undefined\else
+\let\oldparagraph\paragraph
+\renewcommand{\paragraph}[1]{\oldparagraph{#1}\mbox{}}
+\fi
+\ifx\subparagraph\undefined\else
+\let\oldsubparagraph\subparagraph
+\renewcommand{\subparagraph}[1]{\oldsubparagraph{#1}\mbox{}}
+\fi
+
+%%% Use protect on footnotes to avoid problems with footnotes in titles
+\let\rmarkdownfootnote\footnote%
+\def\footnote{\protect\rmarkdownfootnote}
+
+%%% Change title format to be more compact
+\usepackage{titling}
+
+% Create subtitle command for use in maketitle
+\newcommand{\subtitle}[1]{
+  \posttitle{
+    \begin{center}\large#1\end{center}
+    }
+}
+
+\setlength{\droptitle}{-2em}
+  \title{Weighted Alternating Least Squares with the LastFM Dataset}
+  \pretitle{\vspace{\droptitle}\centering\huge}
+  \posttitle{\par}
+  \author{William Morgan}
+  \preauthor{\centering\large\emph}
+  \postauthor{\par}
+  \predate{\centering\large\emph}
+  \postdate{\par}
+  \date{04 May, 2018}
+
+
+\begin{document}
+\maketitle
+
+\subsection{Load data}\label{load-data}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Load data and add names}
+\NormalTok{raw_data <-}\StringTok{  }\KeywordTok{fread}\NormalTok{(}\StringTok{"Data/lastfm-dataset-360K/usersha1-artmbid-artname-plays.tsv"}\NormalTok{, }\DataTypeTok{showProgress =}\NormalTok{ F) }
+
+\KeywordTok{names}\NormalTok{(raw_data) <-}\StringTok{ }\KeywordTok{c}\NormalTok{(}\StringTok{"user_id"}\NormalTok{, }\StringTok{"artist_id"}\NormalTok{, }\StringTok{"artist_name"}\NormalTok{, }\StringTok{"number_plays"}\NormalTok{)}
+
+\NormalTok{raw_data <-}\StringTok{ }\NormalTok{raw_data }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(}\KeywordTok{str_length}\NormalTok{(artist_id) }\OperatorTok{>}\StringTok{ }\DecValTok{10}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{\linethickness}\end{center}
+
+\subsection{Tidy data}\label{tidy-data}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Use integer-valued ids for users and items}
+\NormalTok{user_encoding <-}\StringTok{  }\NormalTok{raw_data }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{distinct}\NormalTok{(user_id) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{uid =} \KeywordTok{row_number}\NormalTok{())}
+  
+\NormalTok{item_encoding <-}\StringTok{ }\NormalTok{raw_data }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{distinct}\NormalTok{(artist_id, artist_name) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{iid =} \KeywordTok{row_number}\NormalTok{())}
+
+\NormalTok{data <-}\StringTok{  }\NormalTok{raw_data }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{inner_join}\NormalTok{(user_encoding, }\DataTypeTok{by =} \StringTok{'user_id'}\NormalTok{) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{inner_join}\NormalTok{(item_encoding, }\DataTypeTok{by =} \StringTok{'artist_id'}\NormalTok{)}
+
+\KeywordTok{rm}\NormalTok{(raw_data)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{\linethickness}\end{center}
+
+\subsection{Split data}\label{split-data}
+
+\begin{itemize}
+\tightlist
+\item
+  We use 30K listeners in our test set
+\item
+  For each listener in the testing set, we need to randomly split their
+  listens into history and future listens (this is done for testing)
+\end{itemize}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Define our model matrix}
+\NormalTok{X =}\StringTok{ }\KeywordTok{sparseMatrix}\NormalTok{(}\DataTypeTok{i =}\NormalTok{ data}\OperatorTok{$}\NormalTok{uid, }\DataTypeTok{j =}\NormalTok{ data}\OperatorTok{$}\NormalTok{iid, }\DataTypeTok{x =}\NormalTok{ data}\OperatorTok{$}\NormalTok{number_plays, }
+                 \DataTypeTok{dimnames =} \KeywordTok{list}\NormalTok{(user_encoding}\OperatorTok{$}\NormalTok{user_id, item_encoding}\OperatorTok{$}\NormalTok{artist_name))}
+
+\NormalTok{n_test <-}\StringTok{ }\NormalTok{30000L}
+\NormalTok{test_uid <-}\StringTok{ }\KeywordTok{sample}\NormalTok{(}\KeywordTok{nrow}\NormalTok{(user_encoding), n_test)}
+
+\NormalTok{X_train <-}\StringTok{  }\NormalTok{X[}\OperatorTok{-}\NormalTok{test_uid, ]}
+\NormalTok{X_test <-}\StringTok{  }\NormalTok{X[test_uid, ]}
+
+\CommentTok{# Split our test set into "history" or "future"}
+\NormalTok{temp =}\StringTok{ }\KeywordTok{as}\NormalTok{(X_test, }\StringTok{"TsparseMatrix"}\NormalTok{)}
+\NormalTok{temp =}\StringTok{ }\KeywordTok{data.table}\NormalTok{(}\DataTypeTok{i =}\NormalTok{ temp}\OperatorTok{@}\NormalTok{i, }\DataTypeTok{j =}\NormalTok{ temp}\OperatorTok{@}\NormalTok{j, }\DataTypeTok{x =}\NormalTok{ temp}\OperatorTok{@}\NormalTok{x) }
+
+\NormalTok{temp <-}\StringTok{ }\NormalTok{temp }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{group_by}\NormalTok{(i) }\OperatorTok{%>%}\StringTok{                         }\CommentTok{# group by user}
+\StringTok{  }\KeywordTok{mutate}\NormalTok{(}\DataTypeTok{ct =} \KeywordTok{length}\NormalTok{(j),                  }\CommentTok{# number of artists each user has}
+         \DataTypeTok{history =} 
+           \KeywordTok{sample}\NormalTok{(}\KeywordTok{c}\NormalTok{(}\OtherTok{TRUE}\NormalTok{, }\OtherTok{FALSE}\NormalTok{), ct, }\DataTypeTok{replace =} \OtherTok{TRUE}\NormalTok{, }\DataTypeTok{prob =} \KeywordTok{c}\NormalTok{(.}\DecValTok{5}\NormalTok{, .}\DecValTok{5}\NormalTok{))) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{select}\NormalTok{(}\OperatorTok{-}\NormalTok{ct)}
+
+\NormalTok{X_test_history <-}\StringTok{ }\NormalTok{temp }\OperatorTok{%>%}\StringTok{ }\KeywordTok{filter}\NormalTok{(history }\OperatorTok{==}\StringTok{ }\OtherTok{TRUE}\NormalTok{)}
+\NormalTok{X_test_future <-}\StringTok{ }\NormalTok{temp }\OperatorTok{%>%}\StringTok{ }\KeywordTok{filter}\NormalTok{(history }\OperatorTok{==}\StringTok{ }\OtherTok{FALSE}\NormalTok{)}
+
+\KeywordTok{rm}\NormalTok{(temp)}
+
+\CommentTok{# Convert them back to sparse matrices}
+\NormalTok{X_test_history <-}\StringTok{ }\KeywordTok{sparseMatrix}\NormalTok{(}\DataTypeTok{i =}\NormalTok{ X_test_history}\OperatorTok{$}\NormalTok{i,}
+                               \DataTypeTok{j =}\NormalTok{ X_test_history}\OperatorTok{$}\NormalTok{j,}
+                               \DataTypeTok{x =}\NormalTok{ X_test_history}\OperatorTok{$}\NormalTok{x,}
+                               \DataTypeTok{dims =} \KeywordTok{dim}\NormalTok{(X_test),}
+                               \DataTypeTok{dimnames =} \KeywordTok{dimnames}\NormalTok{(X_test),}
+                               \DataTypeTok{index1 =} \OtherTok{FALSE}\NormalTok{)}
+
+\NormalTok{X_test_future <-}\StringTok{ }\KeywordTok{sparseMatrix}\NormalTok{(}\DataTypeTok{i =}\NormalTok{ X_test_future}\OperatorTok{$}\NormalTok{i,}
+                              \DataTypeTok{j =}\NormalTok{ X_test_future}\OperatorTok{$}\NormalTok{j,}
+                              \DataTypeTok{x =}\NormalTok{ X_test_future}\OperatorTok{$}\NormalTok{x,}
+                              \DataTypeTok{dims =} \KeywordTok{dim}\NormalTok{(X_test),}
+                              \DataTypeTok{dimnames =} \KeywordTok{dimnames}\NormalTok{(X_test),}
+                              \DataTypeTok{index1 =} \OtherTok{FALSE}\NormalTok{)}
+
+\KeywordTok{rm}\NormalTok{(user_encoding, item_encoding, n_test, test_uid, data)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{center}\rule{0.5\linewidth}{\linethickness}\end{center}
+
+\subsection{Confidence Measures}\label{confidence-measures}
+
+Recall our loss function:
+
+\[
+L = \sum_u\sum_ic_{ui}(p_{ui} - x^{T}_uy_i)^2 + \lambda(\Vert{X}\Vert^2 + \Vert{Y}\Vert^2)
+\] We need to define two functions that will allow us to create the
+confidence matrix: \[
+\begin{aligned}
+c_{ui} = 1 + \alpha log(1 + \frac{r_{ui}}{\epsilon}) \\
+c_{ui} = 1 + \alpha log(1 + r_{ui})
+\end{aligned}
+\] \(\alpha\) and \(\epsilon\) are hyperparameters that should be tuned
+using CV
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Define confidence functions and create matrices}
+\NormalTok{log_conf <-}\StringTok{  }\ControlFlowTok{function}\NormalTok{(x, alpha, epsilon)\{}
+\NormalTok{  x_confidence <-}\StringTok{  }\NormalTok{x}
+  \KeywordTok{stopifnot}\NormalTok{(}\KeywordTok{inherits}\NormalTok{(x, }\StringTok{"sparseMatrix"}\NormalTok{))}
+\NormalTok{  x_confidence}\OperatorTok{@}\NormalTok{x =}\StringTok{ }\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{alpha }\OperatorTok{*}\StringTok{ }\KeywordTok{log}\NormalTok{(}\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{(x}\OperatorTok{@}\NormalTok{x }\OperatorTok{/}\StringTok{ }\NormalTok{epsilon))}
+  \KeywordTok{return}\NormalTok{(x_confidence)}
+\NormalTok{\}}
+
+\NormalTok{lin_conf <-}\StringTok{ }\ControlFlowTok{function}\NormalTok{(x, alpha) \{}
+\NormalTok{  x_confidence <-}\StringTok{ }\NormalTok{x}
+  \KeywordTok{stopifnot}\NormalTok{(}\KeywordTok{inherits}\NormalTok{(x, }\StringTok{"sparseMatrix"}\NormalTok{))}
+\NormalTok{  x_confidence}\OperatorTok{@}\NormalTok{x =}\StringTok{ }\DecValTok{1} \OperatorTok{+}\StringTok{ }\NormalTok{alpha }\OperatorTok{*}\StringTok{ }\NormalTok{x}\OperatorTok{@}\NormalTok{x}
+  \KeywordTok{return}\NormalTok{(x_confidence)}
+\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+\subsection{Practice Model}\label{practice-model}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Define hyperparameters}
+\NormalTok{alpha <-}\StringTok{ }\NormalTok{.}\DecValTok{1}
+\NormalTok{lambda <-}\StringTok{ }\DecValTok{10}
+\NormalTok{components <-}\StringTok{ }\NormalTok{10L}
+
+\CommentTok{# Create Confidence Matrices}
+\NormalTok{X_train_conf <-}\StringTok{ }\KeywordTok{lin_conf}\NormalTok{(X_train, alpha)}
+\NormalTok{X_test_history_conf <-}\StringTok{ }\KeywordTok{lin_conf}\NormalTok{(X_test_history, alpha)}
+
+\CommentTok{# Initialize a model}
+\NormalTok{model <-}\StringTok{ }\NormalTok{WRMF}\OperatorTok{$}\KeywordTok{new}\NormalTok{(}\DataTypeTok{rank =}\NormalTok{ components,}
+                  \DataTypeTok{lambda =}\NormalTok{ lambda,}
+                  \DataTypeTok{feedback =} \StringTok{'implicit'}\NormalTok{,}
+                  \DataTypeTok{solver =} \StringTok{'conjugate_gradient'}\NormalTok{)}
+
+\CommentTok{# Add scoring metrics}
+\NormalTok{model}\OperatorTok{$}\KeywordTok{add_scorers}\NormalTok{(}\DataTypeTok{x_train =}\NormalTok{ X_test_history_conf, }\DataTypeTok{x_cv =}\NormalTok{ X_test_future,}
+                  \KeywordTok{list}\NormalTok{(}\StringTok{"map10"}\NormalTok{ =}\StringTok{ "map@10"}\NormalTok{, }\StringTok{"ndcg-10"}\NormalTok{ =}\StringTok{ "ndcg@10"}\NormalTok{))}
+
+\CommentTok{# Calculate user factors}
+\NormalTok{train_user_factors <-}\StringTok{ }\NormalTok{model}\OperatorTok{$}\KeywordTok{fit_transform}\NormalTok{(X_train_conf)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## INFO [2018-05-04 16:23:28] starting factorization with 12 threads
+## INFO [2018-05-04 16:23:59] iter 1 loss = 0.7994  score ndcg-10 = 0.080304 score map10 = 0.134484
+## INFO [2018-05-04 16:24:30] iter 2 loss = 0.3280  score ndcg-10 = 0.185036 score map10 = 0.312825
+## INFO [2018-05-04 16:25:00] iter 3 loss = 0.2880  score ndcg-10 = 0.217662 score map10 = 0.370606
+## INFO [2018-05-04 16:25:31] iter 4 loss = 0.2790  score ndcg-10 = 0.223829 score map10 = 0.385161
+## INFO [2018-05-04 16:26:01] iter 5 loss = 0.2757  score ndcg-10 = 0.225811 score map10 = 0.390712
+## INFO [2018-05-04 16:26:32] iter 6 loss = 0.2741  score ndcg-10 = 0.226737 score map10 = 0.394074
+## INFO [2018-05-04 16:27:02] iter 7 loss = 0.2731  score ndcg-10 = 0.227460 score map10 = 0.395774
+## INFO [2018-05-04 16:27:02] Converged after 7 iterations
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Make ALS step given fixed items matrix, and then predict for those users top K items}
+\NormalTok{test_predictions <-}\StringTok{ }\NormalTok{model}\OperatorTok{$}\KeywordTok{predict}\NormalTok{(X_test_history_conf, }\DataTypeTok{k =} \DecValTok{10}\NormalTok{)}
+
+\NormalTok{trace =}\StringTok{ }\KeywordTok{attr}\NormalTok{(train_user_factors, }\StringTok{"trace"}\NormalTok{)}
+\KeywordTok{ggplot}\NormalTok{(trace) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{geom_line}\NormalTok{(}\KeywordTok{aes}\NormalTok{(}\DataTypeTok{x =}\NormalTok{ iter, }\DataTypeTok{y =}\NormalTok{ value, }\DataTypeTok{col =}\NormalTok{ scorer)) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{labs}\NormalTok{(}\DataTypeTok{title =} \StringTok{"Loss and Scoring Metrics by iteration"}\NormalTok{) }\OperatorTok{+}
+\StringTok{  }\KeywordTok{theme}\NormalTok{(}\DataTypeTok{plot.title =} \KeywordTok{element_text}\NormalTok{(}\DataTypeTok{hjust =}\NormalTok{ .}\DecValTok{5}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\includegraphics{AWLS_files/figure-latex/model setup-1.pdf}
+
+\subsection{Tune Model - Linear
+Confidence}\label{tune-model---linear-confidence}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Convergence parameters}
+\NormalTok{n_iter_max =}\StringTok{ }\NormalTok{10L}
+\NormalTok{convergence_tol =}\StringTok{ }\NormalTok{.}\DecValTok{01}
+
+\CommentTok{# Hyperparameters to test}
+\NormalTok{grid =}\StringTok{ }\KeywordTok{expand.grid}\NormalTok{(}\DataTypeTok{alpha =} \KeywordTok{c}\NormalTok{(.}\DecValTok{01}\NormalTok{, }\DecValTok{1}\NormalTok{),}
+                   \DataTypeTok{rank =} \KeywordTok{c}\NormalTok{(}\DecValTok{16}\NormalTok{, }\DecValTok{64}\NormalTok{, }\DecValTok{128}\NormalTok{),}
+                   \DataTypeTok{lambda =} \KeywordTok{c}\NormalTok{(}\DecValTok{100}\NormalTok{))}
+
+\CommentTok{# Empty vector to throw results into}
+\NormalTok{lin_scores <-}\StringTok{  }\KeywordTok{vector}\NormalTok{(}\StringTok{"list"}\NormalTok{, }\KeywordTok{nrow}\NormalTok{(grid))}
+
+\ControlFlowTok{for}\NormalTok{ (k }\ControlFlowTok{in} \KeywordTok{seq_len}\NormalTok{(}\KeywordTok{nrow}\NormalTok{(grid)))\{}
+  \CommentTok{# Define parameters}
+\NormalTok{  alpha =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{alpha[[k]]}
+\NormalTok{  rank =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{rank[[k]]}
+\NormalTok{  lambda =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{lambda[[k]]}
+
+  \CommentTok{# Initialize}
+\NormalTok{  model <-}\StringTok{ }\NormalTok{WRMF}\OperatorTok{$}\KeywordTok{new}\NormalTok{(}\DataTypeTok{rank =}\NormalTok{ rank,}
+                    \DataTypeTok{lambda =}\NormalTok{ lambda,}
+                    \DataTypeTok{feedback =} \StringTok{'implicit'}\NormalTok{,}
+                    \DataTypeTok{solver =} \StringTok{'conjugate_gradient'}\NormalTok{)}
+  
+  \CommentTok{# Conf. matrices}
+\NormalTok{  X_train_conf<-}\StringTok{ }\KeywordTok{lin_conf}\NormalTok{(X_train, alpha)}
+\NormalTok{  X_test_history_conf <-}\StringTok{ }\KeywordTok{lin_conf}\NormalTok{(X_test_history, alpha)}
+
+  
+  \CommentTok{# Scoring metrics}
+\NormalTok{  model}\OperatorTok{$}\KeywordTok{add_scorers}\NormalTok{(}\DataTypeTok{x_train =}\NormalTok{ X_test_history_conf,}
+                    \DataTypeTok{x_cv =}\NormalTok{ X_test_future,}
+                    \KeywordTok{list}\NormalTok{(}\StringTok{"map10"}\NormalTok{ =}\StringTok{ "map@10"}\NormalTok{, }\StringTok{"ndcg-10"}\NormalTok{ =}\StringTok{ "ndcg@10"}\NormalTok{))}
+  
+  \CommentTok{# Fit}
+\NormalTok{  fit <-}\StringTok{  }\NormalTok{model}\OperatorTok{$}\KeywordTok{fit_transform}\NormalTok{(X_train_conf, }\DataTypeTok{n_iter =}\NormalTok{ n_iter_max,}
+                              \DataTypeTok{convergence_tol =}\NormalTok{ convergence_tol)}
+
+  \CommentTok{# Extract score}
+\NormalTok{  score <-}\StringTok{  }\KeywordTok{attr}\NormalTok{(fit, }\StringTok{"trace"}\NormalTok{)}
+  
+\NormalTok{  score}\OperatorTok{$}\NormalTok{alpha =}\StringTok{ }\NormalTok{alpha}
+\NormalTok{  score}\OperatorTok{$}\NormalTok{lambda =}\StringTok{ }\NormalTok{lambda}
+\NormalTok{  score}\OperatorTok{$}\NormalTok{rank =}\StringTok{ }\NormalTok{rank}
+
+  \CommentTok{# Add to list}
+\NormalTok{  lin_scores[[k]] <-}\StringTok{  }\NormalTok{score}
+  
+  \CommentTok{# Clean up}
+  \KeywordTok{rm}\NormalTok{(alpha, rank, lambda, model, score)}
+\NormalTok{\}}
+
+\NormalTok{lin_results <-}\StringTok{  }\KeywordTok{bind_rows}\NormalTok{(lin_scores) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{group_by}\NormalTok{(alpha, lambda, rank, scorer) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{arrange}\NormalTok{(iter) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(}\KeywordTok{row_number}\NormalTok{() }\OperatorTok{==}\StringTok{ }\KeywordTok{n}\NormalTok{()) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{select}\NormalTok{(}\OperatorTok{-}\NormalTok{iter) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{ungroup}\NormalTok{()}
+
+\KeywordTok{fwrite}\NormalTok{(lin_results, }\StringTok{"Data/linear confidence results.csv"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{lin_results <-}\StringTok{ }\KeywordTok{fread}\NormalTok{(}\StringTok{"Data/linear confidence results.csv"}\NormalTok{)}
+
+\KeywordTok{print}\NormalTok{(}\StringTok{"Best Performing Models by MAP@10"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Best Performing Models by MAP@10"
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{lin_results }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(scorer }\OperatorTok{==}\StringTok{ "map10"}\NormalTok{) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(value))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##   scorer     value alpha lambda rank
+## 1  map10 0.7867390  0.01    100  128
+## 2  map10 0.6978280  0.01    100   64
+## 3  map10 0.5081508  1.00    100  128
+## 4  map10 0.4799475  0.01    100   16
+## 5  map10 0.4580219  1.00    100   64
+## 6  map10 0.3538391  1.00    100   16
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{print}\NormalTok{(}\StringTok{"Best Performing Models by NDCG@10"}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+## [1] "Best Performing Models by NDCG@10"
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{lin_results }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{filter}\NormalTok{(scorer }\OperatorTok{==}\StringTok{ "ndcg-10"}\NormalTok{) }\OperatorTok{%>%}
+\StringTok{  }\KeywordTok{arrange}\NormalTok{(}\KeywordTok{desc}\NormalTok{(value))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+##    scorer     value alpha lambda rank
+## 1 ndcg-10 0.4295828  0.01    100  128
+## 2 ndcg-10 0.3738932  0.01    100   64
+## 3 ndcg-10 0.3189858  1.00    100  128
+## 4 ndcg-10 0.2780850  1.00    100   64
+## 5 ndcg-10 0.2516068  0.01    100   16
+## 6 ndcg-10 0.2029855  1.00    100   16
+\end{verbatim}
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\CommentTok{# Convergence parameters}
+\NormalTok{n_iter_max =}\StringTok{ }\NormalTok{10L}
+\NormalTok{convergence_tol =}\StringTok{ }\NormalTok{.}\DecValTok{01}
+
+\CommentTok{# Hyperparameters to test}
+\NormalTok{grid =}\StringTok{ }\KeywordTok{expand.grid}\NormalTok{(}\DataTypeTok{alpha =} \KeywordTok{c}\NormalTok{(.}\DecValTok{01}\NormalTok{, }\DecValTok{1}\NormalTok{, }\DecValTok{100}\NormalTok{),}
+                   \DataTypeTok{rank =} \KeywordTok{c}\NormalTok{(}\DecValTok{16}\NormalTok{, }\DecValTok{64}\NormalTok{, }\DecValTok{128}\NormalTok{),}
+                   \DataTypeTok{lambda =} \KeywordTok{c}\NormalTok{(.}\DecValTok{01}\NormalTok{, }\DecValTok{1}\NormalTok{, }\DecValTok{100}\NormalTok{),}
+                   \DataTypeTok{epsilon =} \KeywordTok{c}\NormalTok{(.}\DecValTok{01}\NormalTok{, }\DecValTok{1}\NormalTok{, }\DecValTok{100}\NormalTok{))}
+
+\CommentTok{# Empty vector to throw results into}
+\NormalTok{log_scores <-}\StringTok{  }\KeywordTok{vector}\NormalTok{(}\StringTok{"list"}\NormalTok{, }\KeywordTok{nrow}\NormalTok{(grid))}
+
+\ControlFlowTok{for}\NormalTok{ (k }\ControlFlowTok{in} \KeywordTok{seq_len}\NormalTok{(}\KeywordTok{nrow}\NormalTok{(grid)))\{}
+  \CommentTok{# Define parameters}
+\NormalTok{  alpha =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{alpha[[k]]}
+\NormalTok{  rank =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{rank[[k]]}
+\NormalTok{  lambda =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{lambda[[k]]}
+\NormalTok{  epsilon =}\StringTok{ }\NormalTok{grid}\OperatorTok{$}\NormalTok{epsilon[[k]]}
+
+  
+  \CommentTok{# Initialize}
+\NormalTok{  model <-}\StringTok{ }\NormalTok{WRMF}\OperatorTok{$}\KeywordTok{new}\NormalTok{(}\DataTypeTok{rank =}\NormalTok{ rank,}
+                    \DataTypeTok{lambda =}\NormalTok{ lambda,}
+                    \DataTypeTok{feedback =} \StringTok{'implicit'}\NormalTok{,}
+                    \DataTypeTok{solver =} \StringTok{'conjugate_gradient'}\NormalTok{)}
+  
+  \CommentTok{# Conf. matrices}
+\NormalTok{  X_train_conf <-}\StringTok{ }\KeywordTok{log_conf}\NormalTok{(X_train, alpha, epsilon)}
+\NormalTok{  X_test_history_conf <-}\StringTok{ }\KeywordTok{log_conf}\NormalTok{(X_test_history, alpha, epsilon)}
+
+  \CommentTok{# Scoring metrics}
+\NormalTok{  model}\OperatorTok{$}\KeywordTok{add_scorers}\NormalTok{(}\DataTypeTok{x_train =}\NormalTok{ X_test_history_conf,}
+                    \DataTypeTok{x_cv =}\NormalTok{ X_test_future,}
+                    \KeywordTok{list}\NormalTok{(}\StringTok{"map10"}\NormalTok{ =}\StringTok{ "map@10"}\NormalTok{, }\StringTok{"ndcg-10"}\NormalTok{ =}\StringTok{ "ndcg@10"}\NormalTok{))}
+  
+  \CommentTok{# Fit}
+\NormalTok{  fit <-}\StringTok{  }\NormalTok{model}\OperatorTok{$}\KeywordTok{fit_transform}\NormalTok{(X_train_conf, }\DataTypeTok{n_iter =}\NormalTok{ n_iter_max,}
+                              \DataTypeTok{convergence_tol =}\NormalTok{ convergence_tol)}
+
+  \CommentTok{# Extract score}
+\NormalTok{  score <-}\StringTok{  }\KeywordTok{attr}\NormalTok{(fit, }\StringTok{"trace"}\NormalTok{)}
+  
+\NormalTok{  score}\OperatorTok{$}\NormalTok{alpha =}\StringTok{ }\NormalTok{alpha}
+\NormalTok{  score}\OperatorTok{$}\NormalTok{lambda =}\StringTok{ }\NormalTok{lambda}
+\NormalTok{  score}\OperatorTok{$}\NormalTok{rank =}\StringTok{ }\NormalTok{rank}
+\NormalTok{  score}\OperatorTok{$}\NormalTok{epsilon =}\StringTok{ }\NormalTok{epsilon}
+  
+  \CommentTok{# Add to list}
+\NormalTok{  scores[[k]] <-}\StringTok{  }\NormalTok{score}
+  
+  \CommentTok{# Clean up}
+  \KeywordTok{rm}\NormalTok{(alpha, rank, lambda, model, score, epsilon)}
+\NormalTok{\}}
+\end{Highlighting}
+\end{Shaded}
+
+
+\end{document}

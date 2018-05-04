@@ -7,7 +7,7 @@ output: pdf_document
 
 ```{r setup, include=FALSE}
 rm(list = ls(all = TRUE))
-libs <-  c("data.table", "tidyverse", "Matrix", "reco", "parallel")
+libs <-  c("data.table", "tidyverse", "Matrix", "rsparse", "parallel", "stringr")
 suppressPackageStartupMessages(lapply(libs, library, character.only = T))
 ```
 
@@ -15,8 +15,12 @@ suppressPackageStartupMessages(lapply(libs, library, character.only = T))
 
 ```{r Load and add names, cache = TRUE}
 # Load data and add names
-raw_data <-  fread("Data/lastfm-dataset-360K/usersha1-artmbid-artname-plays.tsv", showProgress = F)
+raw_data <-  fread("Data/lastfm-dataset-360K/usersha1-artmbid-artname-plays.tsv", showProgress = F) 
+
 names(raw_data) <- c("user_id", "artist_id", "artist_name", "number_plays")
+
+raw_data <- raw_data %>%
+  filter(str_length(artist_id) > 10)
 
 ```
 *** 
@@ -30,11 +34,10 @@ user_encoding <-  raw_data %>%
   mutate(uid = row_number())
   
 item_encoding <- raw_data %>%
-  distinct(artist_id) %>%
+  distinct(artist_id, artist_name) %>%
   mutate(iid = row_number())
 
-dt <-  raw_data %>%
-  select(-artist_name) %>%
+data <-  raw_data %>%
   inner_join(user_encoding, by = 'user_id') %>%
   inner_join(item_encoding, by = 'artist_id')
 
@@ -44,30 +47,28 @@ rm(raw_data)
 *** 
 
 ## Split data
-- We use only 1000 listeners as a testing set
+- We use 30K listeners in our test set
 - For each listener in the testing set, we need to randomly split their listens 
 into history and future listens (this is done for testing)
 
 ```{r train/test split}
 # Define our model matrix
-X = sparseMatrix(i = dt$uid, j = dt$iid, x = dt$number_plays, 
+X = sparseMatrix(i = data$uid, j = data$iid, x = data$number_plays, 
                  dimnames = list(user_encoding$user_id, item_encoding$artist_name))
 
-n_test <- 1000L
+n_test <- 30000L
 test_uid <- sample(nrow(user_encoding), n_test)
 
 X_train <-  X[-test_uid, ]
 X_test <-  X[test_uid, ]
-
-rm(X)
 
 # Split our test set into "history" or "future"
 temp = as(X_test, "TsparseMatrix")
 temp = data.table(i = temp@i, j = temp@j, x = temp@x) 
 
 temp <- temp %>%
-  group_by(i) %>%
-  mutate(ct = length(j),
+  group_by(i) %>%                         # group by user
+  mutate(ct = length(j),                  # number of artists each user has
          history = 
            sample(c(TRUE, FALSE), ct, replace = TRUE, prob = c(.5, .5))) %>%
   select(-ct)
@@ -92,29 +93,26 @@ X_test_future <- sparseMatrix(i = X_test_future$i,
                               dimnames = dimnames(X_test),
                               index1 = FALSE)
 
-rm(user_encoding, item_encoding, n_test, test_uid, dt)
+rm(user_encoding, item_encoding, n_test, test_uid, data)
 ```
 *** 
 
-## Set up Model
+## Confidence Measures
 Recall our loss function:
 
 $$
-L = \sum_u\sum_iC_{ui}(P_{ui} - X_uY_i)^2 + \lambda(\Vert{X}\Vert^2 + \Vert{Y}\Vert^2)
+L = \sum_u\sum_ic_{ui}(p_{ui} - x^{T}_uy_i)^2 + \lambda(\Vert{X}\Vert^2 + \Vert{Y}\Vert^2)
 $$
-We define two functions that will allow us to create the confidence matrix:
+We need to define two functions that will allow us to create the confidence matrix:
 $$
 \begin{aligned}
-C_{ui} = 1 + \alpha log(1 + \frac{r_{ui}}{\epsilon}) \\
-C_{ui} = 1 + \alpha log(1 + r_{ui})
+c_{ui} = 1 + \alpha log(1 + \frac{r_{ui}}{\epsilon}) \\
+c_{ui} = 1 + \alpha log(1 + r_{ui})
 \end{aligned}
 $$
 $\alpha$ and $\epsilon$ are hyperparameters that should be tuned using CV
 
-```{r model setup}
-# Initialize a model
-model <- WRMF$new(rank = 10L)
-
+```{r conf func}
 # Define confidence functions and create matrices
 log_conf <-  function(x, alpha, epsilon){
   x_confidence <-  x
@@ -130,62 +128,78 @@ lin_conf <- function(x, alpha) {
   return(x_confidence)
 }
 
+
+```
+
+
+## Practice Model
+
+```{r model setup}
+# Define hyperparameters
 alpha <- .1
+lambda <- 10
+components <- 10L
+
+# Create Confidence Matrices
 X_train_conf <- lin_conf(X_train, alpha)
 X_test_history_conf <- lin_conf(X_test_history, alpha)
+
+# Initialize a model
+model <- WRMF$new(rank = components,
+                  lambda = lambda,
+                  feedback = 'implicit',
+                  solver = 'conjugate_gradient')
 
 # Add scoring metrics
 model$add_scorers(x_train = X_test_history_conf, x_cv = X_test_future,
                   list("map10" = "map@10", "ndcg-10" = "ndcg@10"))
-```
 
-***
+# Calculate user factors
+train_user_factors <- model$fit_transform(X_train_conf)
 
-## Train Model
+# Make ALS step given fixed items matrix, and then predict for those users top K items
+test_predictions <- model$predict(X_test_history_conf, k = 10)
 
-```{r training, eval = F}
-# User embeddings
-user_embeddings <- model$fit_transform(X_train_conf)
-
-# Item embeddings 
-item_embeddings <-  model$components
-
-# Make a prediction for a new user
-new_user_embeddings <- model$transform(X_test_history_conf)
-new_user_1 <-  X_test_history_conf[1:1, , drop = FALSE]
-
-new_user_predictions <- model$predict(new_user_1, k = 10)
+trace = attr(train_user_factors, "trace")
+ggplot(trace) +
+  geom_line(aes(x = iter, y = value, col = scorer)) +
+  labs(title = "Loss and Scoring Metrics by iteration") +
+  theme(plot.title = element_text(hjust = .5))
 
 ```
 
 
-## Tune Model
+## Tune Model - Linear Confidence
 
-```{r tuning model}
+```{r tuning model, eval = F}
 # Convergence parameters
 n_iter_max = 10L
 convergence_tol = .01
 
 # Hyperparameters to test
-grid = expand.grid(alpha = c(.01, .1, 1),
-                   rank = c(8, 16, 32, 40),
-                   lambda = c(.01, .1, 1, 10))
+grid = expand.grid(alpha = c(.01, 1),
+                   rank = c(16, 64, 128),
+                   lambda = c(100))
 
 # Empty vector to throw results into
-scores <-  vector("list", nrow(grid))
+lin_scores <-  vector("list", nrow(grid))
 
 for (k in seq_len(nrow(grid))){
   # Define parameters
   alpha = grid$alpha[[k]]
   rank = grid$rank[[k]]
   lambda = grid$lambda[[k]]
-  
+
   # Initialize
-  model <- WRMF$new(rank = rank)
+  model <- WRMF$new(rank = rank,
+                    lambda = lambda,
+                    feedback = 'implicit',
+                    solver = 'conjugate_gradient')
   
   # Conf. matrices
   X_train_conf<- lin_conf(X_train, alpha)
   X_test_history_conf <- lin_conf(X_test_history, alpha)
+
   
   # Scoring metrics
   model$add_scorers(x_train = X_test_history_conf,
@@ -202,39 +216,103 @@ for (k in seq_len(nrow(grid))){
   score$alpha = alpha
   score$lambda = lambda
   score$rank = rank
-  
+
   # Add to list
-  scores[[k]] <-  score
+  lin_scores[[k]] <-  score
   
   # Clean up
   rm(alpha, rank, lambda, model, score)
 }
 
-cv_results <-  bind_rows(scores) %>%
+lin_results <-  bind_rows(lin_scores) %>%
   group_by(alpha, lambda, rank, scorer) %>%
   arrange(iter) %>%
   filter(row_number() == n()) %>%
   select(-iter) %>%
   ungroup()
 
+fwrite(lin_results, "Data/linear confidence results.csv")
+
 ```
 
-```{r best performances by scorer}
-best_loss <-  cv_results %>%
-  filter(scorer == "loss") %>%
-  arrange(value) %>%
-  filter(row_number() == 1)
+```{r print results}
+lin_results <- fread("Data/linear confidence results.csv")
 
-best_map <-  cv_results %>%
+print("Best Performing Models by MAP@10")
+lin_results %>%
   filter(scorer == "map10") %>%
-  arrange(desc(value)) %>%
-  filter(row_number() == 1)
+  arrange(desc(value))
 
-best_ndcg <-  cv_results %>%
+print("Best Performing Models by NDCG@10")
+lin_results %>%
   filter(scorer == "ndcg-10") %>%
-  arrange(desc(value)) %>%
-  filter(row_number() == 1)
-
-best <-  bind_rows(best_loss, best_map, best_ndcg)
-rm(best_loss, best_map, best_ndcg)
+  arrange(desc(value))
 ```
+
+
+
+```{r log conf, eval = F}
+# Convergence parameters
+n_iter_max = 10L
+convergence_tol = .01
+
+# Hyperparameters to test
+grid = expand.grid(alpha = c(.01, 1, 100),
+                   rank = c(16, 64, 128),
+                   lambda = c(.01, 1, 100),
+                   epsilon = c(.01, 1, 100))
+
+# Empty vector to throw results into
+log_scores <-  vector("list", nrow(grid))
+
+for (k in seq_len(nrow(grid))){
+  # Define parameters
+  alpha = grid$alpha[[k]]
+  rank = grid$rank[[k]]
+  lambda = grid$lambda[[k]]
+  epsilon = grid$epsilon[[k]]
+
+  
+  # Initialize
+  model <- WRMF$new(rank = rank,
+                    lambda = lambda,
+                    feedback = 'implicit',
+                    solver = 'conjugate_gradient')
+  
+  # Conf. matrices
+  X_train_conf <- log_conf(X_train, alpha, epsilon)
+  X_test_history_conf <- log_conf(X_test_history, alpha, epsilon)
+
+  # Scoring metrics
+  model$add_scorers(x_train = X_test_history_conf,
+                    x_cv = X_test_future,
+                    list("map10" = "map@10", "ndcg-10" = "ndcg@10"))
+  
+  # Fit
+  fit <-  model$fit_transform(X_train_conf, n_iter = n_iter_max,
+                              convergence_tol = convergence_tol)
+
+  # Extract score
+  score <-  attr(fit, "trace")
+  
+  score$alpha = alpha
+  score$lambda = lambda
+  score$rank = rank
+  score$epsilon = epsilon
+  
+  # Add to list
+  scores[[k]] <-  score
+  
+  # Clean up
+  rm(alpha, rank, lambda, model, score, epsilon)
+}
+
+
+```
+
+
+
+
+
+
+
